@@ -10,6 +10,7 @@ from pathlib import Path
 
 import uvicorn
 import webview
+from main import app
 
 
 # ==========================================================
@@ -43,11 +44,6 @@ INDEX_HTML = BASE_DIR / "static" / "index.html"
 
 # ==========================================================
 # SERVIDOR
-# ==========================================================
-
-from main import app
-
-
 def obtener_puerto_libre():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind((HOST, 0))

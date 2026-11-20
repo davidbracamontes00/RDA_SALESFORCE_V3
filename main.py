@@ -1,15 +1,20 @@
 from io import BytesIO
+import os
 from pathlib import Path
+import secrets
+from typing import Any
 
 import pandas as pd
 
+from pydantic import BaseModel, Field
 from fastapi import FastAPI
 from fastapi import UploadFile
 from fastapi import File
-from fastapi import Body
+from fastapi import Depends
 from fastapi.responses import FileResponse
 from fastapi.responses import HTMLResponse
 from fastapi import HTTPException
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 
 from limpieza import (
@@ -43,10 +48,56 @@ from exportar_excel import (
 # APP
 # ==========================================================
 
+ENTORNO = os.getenv("RDA_ENV", "development").strip().lower()
+AUTENTICACION_ACTIVA = os.getenv("RDA_AUTH_ENABLED", "false").strip().lower() in {
+    "1", "true", "yes", "si", "sí"
+}
+USUARIO_APP = os.getenv("RDA_USERNAME", "")
+CONTRASENA_APP = os.getenv("RDA_PASSWORD", "")
+
+if AUTENTICACION_ACTIVA and (not USUARIO_APP or not CONTRASENA_APP):
+    raise RuntimeError(
+        "RDA_AUTH_ENABLED está activo, pero faltan RDA_USERNAME o RDA_PASSWORD."
+    )
+
+es_produccion = ENTORNO == "production"
 app = FastAPI(
     title="Reporte de Afluencia GAC",
-    version="2.2.0"
+    version="3.0.0",
+    docs_url=None if es_produccion else "/docs",
+    redoc_url=None if es_produccion else "/redoc",
+    openapi_url=None if es_produccion else "/openapi.json"
 )
+
+esquema_basico = HTTPBasic(auto_error=False)
+
+
+def requerir_autenticacion(
+    credenciales: HTTPBasicCredentials | None = Depends(esquema_basico)
+):
+    if not AUTENTICACION_ACTIVA:
+        return None
+
+    usuario_valido = bool(
+        credenciales
+        and secrets.compare_digest(credenciales.username, USUARIO_APP)
+    )
+    contrasena_valida = bool(
+        credenciales
+        and secrets.compare_digest(credenciales.password, CONTRASENA_APP)
+    )
+    if not (usuario_valido and contrasena_valida):
+        raise HTTPException(
+            status_code=401,
+            detail="Se requieren credenciales válidas.",
+            headers={"WWW-Authenticate": "Basic"}
+        )
+    return credenciales.username
+
+
+class DescargaFiltradaRequest(BaseModel):
+    reporte: list[dict[str, Any]] = Field(min_length=1)
+    clientes: list[dict[str, Any]] = Field(default_factory=list)
 
 # ==========================================================
 # CONFIGURACION
@@ -68,9 +119,8 @@ COLUMNAS_FINALES = [
 ]
 
 
-CARPETA_REPORTES = (
-    Path.home()
-    / "Downloads"
+CARPETA_REPORTES = Path(
+    os.getenv("RDA_REPORTS_DIR", str(Path.home() / "Downloads"))
 )
 
 
@@ -141,9 +191,7 @@ def guardar_excel(
 ) -> Path:
 
 
-    CARPETA_REPORTES.mkdir(
-        exist_ok=True
-    )
+    CARPETA_REPORTES.mkdir(parents=True, exist_ok=True)
 
     fecha_hoy = pd.Timestamp.now().strftime(
         "%Y-%m-%d"
@@ -176,9 +224,7 @@ def guardar_excel_filtrado(
     clientes_filtrados: pd.DataFrame
 ) -> Path:
 
-    CARPETA_REPORTES.mkdir(
-        exist_ok=True
-    )
+    CARPETA_REPORTES.mkdir(parents=True, exist_ok=True)
 
     fecha_hoy = pd.Timestamp.now().strftime(
         "%Y-%m-%d_%H-%M-%S-%f"
@@ -200,7 +246,7 @@ def guardar_excel_filtrado(
 
 
 @app.get("/", response_class=HTMLResponse)
-def inicio():
+def inicio(_usuario: str | None = Depends(requerir_autenticacion)):
 
     try:
 
@@ -229,6 +275,12 @@ def inicio():
         )
 
 
+@app.get("/healthz")
+def healthz():
+    """Endpoint sin datos personales para health checks del contenedor."""
+    return {"status": "ok"}
+
+
 
 # ==========================================================
 # DESCARGA FILTRADA
@@ -236,33 +288,18 @@ def inicio():
 
 @app.post("/descargar-filtrado")
 def descargar_filtrado(
-    payload: dict = Body(...)
+    payload: DescargaFiltradaRequest,
+    _usuario: str | None = Depends(requerir_autenticacion)
 ):
 
     try:
 
-        reporte = payload.get(
-            "reporte",
-            []
-        )
-
-        clientes = payload.get(
-            "clientes",
-            []
-        )
-
-        if not reporte:
-
-            raise ValueError(
-                "No se recibieron datos del reporte."
-            )
-
         reporte_filtrado = pd.DataFrame(
-            reporte
+            payload.reporte
         )
 
         clientes_filtrados = pd.DataFrame(
-            clientes
+            payload.clientes
         )
 
         archivo_excel = (
@@ -301,7 +338,8 @@ def procesar_archivos(
 
     oportunidades: UploadFile = File(...),
 
-    eventos: UploadFile = File(...)
+    eventos: UploadFile = File(...),
+    _usuario: str | None = Depends(requerir_autenticacion)
 
 ):
 

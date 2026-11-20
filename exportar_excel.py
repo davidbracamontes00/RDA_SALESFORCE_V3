@@ -233,10 +233,6 @@ def aplicar_encabezados_tabla(hoja):
 
 def aplicar_marco_encabezado(hoja):
 
-    ultima_columna = get_column_letter(
-        hoja.max_column
-    )
-
     # Fondo blanco
     for fila in hoja.iter_rows(
         min_row=1,
