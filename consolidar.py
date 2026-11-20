@@ -15,8 +15,8 @@ CANALES = [
     "PISO",
     "LEADS MARCA",
     "LEADS BDC",
-    "CALLE",
-    "PLAZAS",
+    "PROSPECCION",
+    "POP-UP STORE",
     "EVENTOS",
     "FAN PAGE",
     "REACTIVACIONES"
@@ -40,8 +40,8 @@ def generar_clientes_unicos(
 ):
     df_clientes = pd.concat(
         [
-            df_oportunidades,
-            df_prospectos
+            df_prospectos,
+            df_oportunidades
         ],
         ignore_index=True
     )

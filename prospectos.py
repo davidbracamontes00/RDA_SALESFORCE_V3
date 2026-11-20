@@ -2,6 +2,8 @@
 # prospectos.py
 # ==========================================================
 
+import unicodedata
+
 import pandas as pd
 
 from limpieza import (
@@ -28,8 +30,8 @@ CANALES = {
     "PISO": "PISO",
     "LEADS MARCA": "LEADS MARCA",
     "LEADS BDC": "LEADS BDC",
-    "CALLE": "CALLE",
-    "PLAZAS": "PLAZAS",
+    "CALLE": "PROSPECCION",
+    "PLAZAS": "POP-UP STORE",
     "EVENTOS": "EVENTOS",
     "FAN PAGE": "FAN PAGE",
     "REACTIVACIONES": "REACTIVACIONES",
@@ -48,8 +50,25 @@ PALABRAS_REACTIVACION = [
 
 PALABRAS_PLAZA = [
     "FASHION",
-    "SENDERO"
+    "SENDERO",
+    "MISIONES",
+    "PLAZA",
+    "CHINA MART",
+    "CHINAMART",
+    "ALSUPER",
+    "POP-UP STORE",
+    "POP UP STORE"
 ]
+
+
+def normalizar_clasificacion(valor):
+    """Normaliza texto para comparar orígenes con o sin acentos."""
+    texto = normalizar_texto(valor)
+    return "".join(
+        caracter
+        for caracter in unicodedata.normalize("NFKD", texto)
+        if not unicodedata.combining(caracter)
+    )
 
 
 # ==========================================================
@@ -118,15 +137,15 @@ def crear_cliente_id(row):
 
 def clasificar_canal(row):
 
-    sitio = normalizar_texto(
+    sitio = normalizar_clasificacion(
         row["Sitio de origen"]
     )
 
-    origen = normalizar_texto(
+    origen = normalizar_clasificacion(
         row["Origen del prospecto"]
     )
 
-    campaña = normalizar_texto(
+    campaña = normalizar_clasificacion(
         row["Campaña de dealer"]
     )
 
@@ -137,27 +156,11 @@ def clasificar_canal(row):
     if origen == "PISO":
         return CANALES["PISO"]
 
-    # ----------------------------------
-    # LEADS MARCA
-    # ----------------------------------
-
+    # BDC origins take priority over generic site labels such as MARCA.
     if (
-        sitio == "MARCA"
-        or origen in ["WEB", "MARCA"]
+        origen in ["GOOGLE", "META", "TIKTOK", "TIKTOK LIVE", "BDC", "LEAD BDC", "LEADS BDC"]
+        or sitio in ["BDC", "LEAD BDC", "LEADS BDC"]
     ):
-        return CANALES["LEADS MARCA"]
-
-
-    # ----------------------------------
-    # LEADS BDC
-    # ----------------------------------
-
-    if origen in [
-        "GOOGLE",
-        "META",
-        "TIKTOK",
-        "TIKTOK LIVE"
-    ]:
         return CANALES["LEADS BDC"]
 
     # ----------------------------------
@@ -167,26 +170,33 @@ def clasificar_canal(row):
     if origen == "META ASESORES":
         return CANALES["FAN PAGE"]
 
+    # Algunos reportes ya entregan la categoría final como origen.
+    # Reconocerla directamente, aunque no venga marcada como PROSPECCION
+    # ni incluya una campaña de plaza.
+    if (
+        "POP-UP STORE" in origen
+        or "POP UP STORE" in origen
+        or "PLAZA" in origen
+    ):
+        return CANALES["PLAZAS"]
+
     # ----------------------------------
     # PROSPECCION
     # ----------------------------------
 
-    if origen == "PROSPECCION":
-
-        if "CALLE" in campaña:
-            return CANALES["CALLE"]
-
-        if any(
-            palabra in campaña
-            for palabra in PALABRAS_PLAZA
-        ):
+    if "PROSPECCION" in origen or origen.startswith("CALLE"):
+        if any(palabra in campaña for palabra in PALABRAS_PLAZA):
             return CANALES["PLAZAS"]
+
+        # Toda prospección que no se identifica como actividad de plaza
+        # se cuenta en PROSPECCION, aunque la campaña esté vacía.
+        return CANALES["CALLE"]
 
     # ----------------------------------
     # EVENTOS
     # ----------------------------------
 
-    if sitio == "EVENTO":
+    if origen == "EVENTO":
         return CANALES["EVENTOS"]
 
     # ----------------------------------
@@ -207,6 +217,10 @@ def clasificar_canal(row):
             for palabra in PALABRAS_REACTIVACION
         ):
             return CANALES["REACTIVACIONES"]
+
+    # Mantener la clasificación específica antes del origen genérico MARCA.
+    if origen in ["WEB", "MARCA"] or sitio == "MARCA":
+        return CANALES["LEADS MARCA"]
 
     return CANALES["SIN CLASIFICAR"]
 
@@ -297,6 +311,16 @@ def construir_resultado(df):
             "PROSPECTO"
 
     })
+
+    # Si el CRM repite un cliente y una de sus filas no tenía canal,
+    # conservar la fila que sí pudo clasificarse.
+    resultado["_sin_clasificar"] = (
+        resultado["canal"] == CANALES["SIN CLASIFICAR"]
+    ).astype("int8")
+    resultado = resultado.sort_values(
+        "_sin_clasificar",
+        kind="stable"
+    ).drop(columns="_sin_clasificar")
 
     resultado = resultado.drop_duplicates(
         subset=["cliente_id"],

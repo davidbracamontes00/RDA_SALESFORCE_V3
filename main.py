@@ -3,26 +3,19 @@ from pathlib import Path
 
 import pandas as pd
 
-import os
-
 from fastapi import FastAPI
 from fastapi import UploadFile
 from fastapi import File
 from fastapi import Body
 from fastapi.responses import FileResponse
-from fastapi.responses import FileResponse
 from fastapi.responses import HTMLResponse
+from fastapi import HTTPException
 
-
-from fastapi.middleware.cors import (
-    CORSMiddleware
-)
 
 from limpieza import (
     limpiar_prospectos,
     limpiar_oportunidades,
-    limpiar_eventos,
-    asegurar_columnas
+    limpiar_eventos
 )
 
 from prospectos import (
@@ -52,17 +45,8 @@ from exportar_excel import (
 
 app = FastAPI(
     title="Reporte de Afluencia GAC",
-    version="2.1.0"
+    version="2.2.0"
 )
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"]
-)
-
 
 # ==========================================================
 # CONFIGURACION
@@ -73,8 +57,8 @@ COLUMNAS_FINALES = [
     "PISO",
     "LEADS MARCA",
     "LEADS BDC",
-    "CALLE",
-    "PLAZAS",
+    "PROSPECCION",
+    "POP-UP STORE",
     "EVENTOS",
     "REACTIVACIONES",
     "FAN PAGE",
@@ -197,12 +181,12 @@ def guardar_excel_filtrado(
     )
 
     fecha_hoy = pd.Timestamp.now().strftime(
-        "%Y-%m-%d"
+        "%Y-%m-%d_%H-%M-%S-%f"
     )
 
     archivo_excel = (
         CARPETA_REPORTES
-        / f"RDA_GAC_{fecha_hoy}.xlsx"
+        / f"RDA_GAC_{fecha_hoy}_Filtrado.xlsx"
     )
 
     exportar_excel(
@@ -251,7 +235,7 @@ def inicio():
 # ==========================================================
 
 @app.post("/descargar-filtrado")
-async def descargar_filtrado(
+def descargar_filtrado(
     payload: dict = Body(...)
 ):
 
@@ -303,10 +287,7 @@ async def descargar_filtrado(
         print(error)
         print("================================\n")
 
-        return {
-            "status": "error",
-            "mensaje": str(error)
-        }
+        raise HTTPException(status_code=400, detail=str(error))
 
         
 # ==========================================================
@@ -314,7 +295,7 @@ async def descargar_filtrado(
 # ==========================================================
 
 @app.post("/procesar")
-async def procesar_archivos(
+def procesar_archivos(
 
     prospectos: UploadFile = File(...),
 
@@ -453,7 +434,4 @@ async def procesar_archivos(
         print(error)
         print("================================\n")
 
-        return {
-            "status": "error",
-            "mensaje": str(error)
-        }
+        raise HTTPException(status_code=400, detail=str(error))

@@ -162,18 +162,18 @@ def clasificar_origen(row):
             palabra in otra_razon
             for palabra in PLAZAS_KEYWORDS
         ):
-            return "PLAZAS"
+            return "POP-UP STORE"
 
         if any(
             palabra in otra_razon
             for palabra in CALLE_KEYWORDS
         ):
-            return "CALLE"
+            return "PROSPECCION"
 
         # Toda prospección que no sea plaza
         # se considera calle.
         if origen == "PROSPECCION":
-            return "CALLE"
+            return "PROSPECCION"
 
     # ==========================================
     # SIN CLASIFICAR

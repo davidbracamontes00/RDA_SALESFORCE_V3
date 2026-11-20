@@ -5,6 +5,7 @@
 import sys
 import time
 import threading
+import socket
 from pathlib import Path
 
 import uvicorn
@@ -16,7 +17,7 @@ import webview
 # ==========================================================
 
 HOST = "127.0.0.1"
-PORT = 8000
+PORT = None
 
 APP_TITLE = "Reporte de Afluencia GAC"
 
@@ -47,16 +48,10 @@ INDEX_HTML = BASE_DIR / "static" / "index.html"
 from main import app
 
 
-def iniciar_servidor():
-
-    uvicorn.run(
-        app,
-        host=HOST,
-        port=PORT,
-        reload=False,
-        access_log=False,
-        log_config=None
-    )
+def obtener_puerto_libre():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind((HOST, 0))
+        return sock.getsockname()[1]
 
 
 # ==========================================================
@@ -65,22 +60,42 @@ def iniciar_servidor():
 
 if __name__ == "__main__":
 
+    PORT = obtener_puerto_libre()
+    config = uvicorn.Config(
+        app,
+        host=HOST,
+        port=PORT,
+        reload=False,
+        access_log=False,
+        log_config=None
+    )
+    servidor_http = uvicorn.Server(config)
+
     servidor = threading.Thread(
-        target=iniciar_servidor,
+        target=servidor_http.run,
         daemon=True
     )
 
     servidor.start()
 
-    print("SERVIDOR INICIADO")
-    time.sleep(10)
+    limite = time.monotonic() + 15
+    while not servidor_http.started and servidor.is_alive():
+        if time.monotonic() >= limite:
+            servidor_http.should_exit = True
+            raise RuntimeError("El servidor local no pudo iniciar en 15 segundos.")
+        time.sleep(0.05)
+
+    if not servidor_http.started:
+        raise RuntimeError("El servidor local terminó antes de iniciar.")
 
     webview.create_window(
         title=APP_TITLE,
         url=f"http://{HOST}:{PORT}",
-        width=1500,
-        height=950,
-        min_size=(1200, 800)
+        width=1400,
+        height=900,
+        min_size=(980, 680)
     )
 
     webview.start()
+    servidor_http.should_exit = True
+    servidor.join(timeout=5)

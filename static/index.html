@@ -119,6 +119,13 @@ body{
 
 <div class="container">
 
+<div class="theme-tools">
+    <span id="themeLabel">Tema: Oscuro</span>
+    <button id="themeToggle" type="button" onclick="alternarTema()" aria-label="Cambiar a tema claro">
+        ☀️ Cambiar a claro
+    </button>
+</div>
+
 
 <style>
 
@@ -228,6 +235,11 @@ body{
 </div>
 
 <div class="panel">
+
+    <div class="workflow-intro">
+        <span class="workflow-kicker">PROCESO EN 3 PASOS</span>
+        <p>Carga los tres reportes del CRM, genera el resumen y descarga el Excel con totales.</p>
+    </div>
 
 <!-- ===================================================== -->
 <!-- CARGA DE ARCHIVOS -->
@@ -400,7 +412,7 @@ input[type=file]{
     <div class="upload-card">
 
         <div class="upload-title">
-            Prospectos
+            1 · Prospectos
         </div>
 
         <div class="upload-text">
@@ -409,7 +421,8 @@ input[type=file]{
 
         <input
         type="file"
-        id="prospectosFile">
+        id="prospectosFile"
+        accept=".xlsx,.xls">
 
         <button
         class="upload-btn"
@@ -437,7 +450,7 @@ input[type=file]{
     <div class="upload-card">
 
         <div class="upload-title">
-            Oportunidades
+            2 · Oportunidades
         </div>
 
         <div class="upload-text">
@@ -446,7 +459,8 @@ input[type=file]{
 
         <input
         type="file"
-        id="oportunidadesFile">
+        id="oportunidadesFile"
+        accept=".xlsx,.xls">
 
         <button
         class="upload-btn"
@@ -474,7 +488,7 @@ input[type=file]{
     <div class="upload-card">
 
         <div class="upload-title">
-            Eventos
+            3 · Eventos
         </div>
 
         <div class="upload-text">
@@ -483,7 +497,8 @@ input[type=file]{
 
         <input
         type="file"
-        id="eventosFile">
+        id="eventosFile"
+        accept=".xlsx,.xls">
 
         <button
         class="upload-btn"
@@ -511,7 +526,7 @@ input[type=file]{
     <div class="upload-card">
 
         <div class="upload-title">
-            Generar Reporte
+            4 · Generar reporte
         </div>
 
         <div class="upload-text">
@@ -520,6 +535,7 @@ input[type=file]{
 
         <button
         class="upload-btn process-btn"
+        id="processButton"
         onclick="procesarInformacion()">
 
             GENERAR
@@ -831,7 +847,7 @@ input[type=file]{
         class="dropdown-btn"
         id="dropdownBtn">
 
-            Seleccionar asesores ▼
+            Marcar asesores para filtrar ▼
 
         </button>
 
@@ -844,6 +860,11 @@ input[type=file]{
             id="searchVendor"
             class="search-input"
             placeholder="Buscar asesor...">
+
+            <div class="selection-tools">
+                <button type="button" onclick="seleccionarTodos()">Seleccionar todos</button>
+                <button type="button" onclick="limpiarSeleccion()">Limpiar selección</button>
+            </div>
 
             <div
             id="vendorsContainer">
@@ -858,14 +879,18 @@ input[type=file]{
 
         <button
         class="action-btn btn-filter"
+        id="filterButton"
+        disabled
         onclick="filtrarTabla()">
 
-            FILTRAR TABLA
+            APLICAR FILTRO
 
         </button>
 
         <button
         class="action-btn btn-download"
+        id="downloadButton"
+        disabled
         onclick="descargarExcelFiltrado()">
 
             DESCARGAR EXCEL
@@ -899,6 +924,14 @@ input[type=file]{
 <!-- ===================================================== -->
 <!-- TABLA -->
 <!-- ===================================================== -->
+
+<div class="table-heading">
+    <div>
+        <h2>Resumen por asesor</h2>
+        <p>El renglón inferior muestra los totales de las filas visibles.</p>
+    </div>
+    <span class="table-hint">Desliza horizontalmente para ver todas las columnas</span>
+</div>
 
 <style>
 
@@ -1152,9 +1185,9 @@ tfoot{
 
                     <th>LEADS BDC</th>
 
-                    <th>CALLE</th>
+                    <th>PROSPECCION</th>
 
-                    <th>PLAZAS</th>
+                    <th>POP-UP STORE</th>
 
                     <th>EVENTOS</th>
 
@@ -1217,6 +1250,29 @@ let apvsSeleccionados = [];
 
 let archivoExcel = null;
 
+function aplicarTema(tema){
+    const temaSeguro = tema === "light" ? "light" : "dark";
+    document.documentElement.dataset.theme = temaSeguro;
+    const esClaro = temaSeguro === "light";
+    document.getElementById("themeLabel").textContent = `Tema: ${esClaro ? "Claro" : "Oscuro"}`;
+    const boton = document.getElementById("themeToggle");
+    boton.textContent = esClaro ? "🌙 Cambiar a oscuro" : "☀️ Cambiar a claro";
+    boton.setAttribute("aria-label", esClaro ? "Cambiar a tema oscuro" : "Cambiar a tema claro");
+    try { localStorage.setItem("rda-gac-tema", temaSeguro); } catch (error) { /* La preferencia sigue aplicándose en esta sesión. */ }
+}
+
+function alternarTema(){
+    aplicarTema(document.documentElement.dataset.theme === "light" ? "dark" : "light");
+}
+
+function inicializarTema(){
+    let temaGuardado = "dark";
+    try { temaGuardado = localStorage.getItem("rda-gac-tema") || "dark"; } catch (error) { /* Usa el tema oscuro predeterminado. */ }
+    aplicarTema(temaGuardado);
+}
+
+inicializarTema();
+
 
 const tableBody =
 document.getElementById(
@@ -1260,6 +1316,11 @@ function actualizarStatusSistema(
 
     }
 
+}
+
+function escaparHTML(valor){
+    const caracteres = {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"};
+    return String(valor ?? "").replace(/[&<>"']/g, caracter => caracteres[caracter]);
 }
 
 
@@ -1340,14 +1401,14 @@ function renderizarVendedores(){
 
                 <input
                 type="checkbox"
-                value="${nombre}"
+                value="${escaparHTML(nombre)}"
                 onchange="
                 actualizarSeleccionados()
                 ">
 
                 <label>
 
-                    ${nombre}
+                    ${escaparHTML(nombre)}
 
                 </label>
 
@@ -1390,8 +1451,8 @@ function actualizarTotales(
         "PISO",
         "LEADS MARCA",
         "LEADS BDC",
-        "CALLE",
-        "PLAZAS",
+        "PROSPECCION",
+        "POP-UP STORE",
         "EVENTOS",
         "REACTIVACIONES",
         "FAN PAGE",
@@ -1523,7 +1584,7 @@ function renderizarTabla(
 
                 <td class="apv-cell">
 
-                    ${fila.APV || ""}
+                    ${escaparHTML(fila.APV || "")}
 
                 </td>
 
@@ -1533,9 +1594,9 @@ function renderizarTabla(
 
                 <td>${fila["LEADS BDC"] || 0}</td>
 
-                <td>${fila["CALLE"] || 0}</td>
+                <td>${fila["PROSPECCION"] || 0}</td>
 
-                <td>${fila["PLAZAS"] || 0}</td>
+                <td>${fila["POP-UP STORE"] || 0}</td>
 
                 <td>${fila["EVENTOS"] || 0}</td>
 
@@ -1554,17 +1615,10 @@ function renderizarTabla(
                     <input
                     type="number"
                     min="0"
-                    value="${fila.avaluos || 0}"
+                    value="${escaparHTML(fila.avaluos || 0)}"
                     class="manual-input"
 
-                    onchange="
-
-                        actualizarAvaluo(
-                            '${fila.APV}',
-                            this.value
-                        )
-
-                    ">
+                    >
 
                 </td>
 
@@ -1573,6 +1627,10 @@ function renderizarTabla(
             tableBody.appendChild(
                 tr
             );
+
+            tr.querySelector(".manual-input").addEventListener("change", event => {
+                actualizarAvaluo(fila.APV, event.target.value);
+            });
 
         }
 
@@ -1778,6 +1836,7 @@ function seleccionarTodos(){
     );
 
     actualizarSeleccionados();
+    filtrarTabla();
 
 }
 
@@ -1800,6 +1859,7 @@ function limpiarSeleccion(){
     );
 
     actualizarSeleccionados();
+    filtrarTabla();
 
 }
 
@@ -1940,6 +2000,11 @@ async function procesarInformacion(){
         "Procesando información..."
     );
 
+    const processButton = document.getElementById("processButton");
+    processButton.disabled = true;
+    processButton.dataset.procesando = "true";
+    processButton.textContent = "PROCESANDO…";
+
     document
     .getElementById(
         "processStatus"
@@ -1978,7 +2043,7 @@ async function procesarInformacion(){
         const response =
         await fetch(
 
-            "http://localhost:8000/procesar",
+            "/procesar",
 
             {
                 method:"POST",
@@ -1991,10 +2056,9 @@ async function procesarInformacion(){
             !response.ok
         ){
 
+            const errorPayload = await response.json().catch(() => ({}));
             throw new Error(
-
-                `HTTP ${response.status}`
-
+                errorPayload.detail || errorPayload.mensaje || `Error HTTP ${response.status}`
             );
 
         }
@@ -2068,6 +2132,9 @@ async function procesarInformacion(){
 
         cargarVendedoresDesdeDatos();
 
+        document.getElementById("filterButton").disabled = false;
+        document.getElementById("downloadButton").disabled = false;
+
         // =====================================
         // TABLA
         // =====================================
@@ -2091,7 +2158,7 @@ async function procesarInformacion(){
             "processStatus"
         )
         .textContent =
-        "Reporte generado";
+        `Reporte generado · ${clientesCompletos.length.toLocaleString("es-MX")} clientes`;
 
         console.log(
             "Reporte cargado"
@@ -2138,6 +2205,12 @@ async function procesarInformacion(){
 
     }
 
+    finally{
+        delete processButton.dataset.procesando;
+        actualizarEstadoCarga();
+        processButton.textContent = "GENERAR REPORTE";
+    }
+
 }
 
 
@@ -2176,8 +2249,8 @@ function actualizarNombreArchivo(
             ){
 
                 status.textContent =
-                "✓ " +
-                this.files[0].name;
+                "✓ " + this.files[0].name + " · " +
+                (this.files[0].size / (1024 * 1024)).toFixed(1) + " MB";
 
             }
 
@@ -2187,6 +2260,8 @@ function actualizarNombreArchivo(
                 "Sin archivo";
 
             }
+
+            actualizarEstadoCarga();
 
         }
     );
@@ -2198,6 +2273,32 @@ actualizarNombreArchivo(
     "prospectosFile",
     "prospectosStatus"
 );
+
+function archivosCompletosSeleccionados(){
+    return ["prospectosFile", "oportunidadesFile", "eventosFile"]
+        .every(id => document.getElementById(id).files.length > 0);
+}
+
+function actualizarEstadoCarga(){
+    const completos = archivosCompletosSeleccionados();
+    const button = document.getElementById("processButton");
+    if(button && !button.dataset.procesando){
+        button.disabled = !completos;
+    }
+    const status = document.getElementById("processStatus");
+    if(status && !completos){
+        const faltantes = [
+            ["prospectosFile", "Prospectos"],
+            ["oportunidadesFile", "Oportunidades"],
+            ["eventosFile", "Eventos"]
+        ].filter(([id]) => !document.getElementById(id).files.length).map(([, nombre]) => nombre);
+        status.textContent = `Falta cargar: ${faltantes.join(", ")}`;
+    } else if(status && status.textContent.startsWith("Falta cargar:")){
+        status.textContent = "Archivos listos para procesar";
+    }
+}
+
+actualizarEstadoCarga();
 
 actualizarNombreArchivo(
     "oportunidadesFile",
@@ -2260,7 +2361,7 @@ async function descargarExcelFiltrado(){
         const response =
         await fetch(
 
-            "http://localhost:8000/descargar-filtrado",
+            "/descargar-filtrado",
 
             {
                 method:"POST",
@@ -2281,9 +2382,8 @@ async function descargarExcelFiltrado(){
             !response.ok
         ){
 
-            throw new Error(
-                "Error generando Excel."
-            );
+            const errorPayload = await response.json().catch(() => ({}));
+            throw new Error(errorPayload.detail || "Error generando Excel.");
 
         }
 
@@ -2357,3 +2457,82 @@ async function descargarExcelFiltrado(){
 
 
 </script>
+
+<style>
+    .theme-tools { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin: 0 2px 12px; color: #c9c9cf; font-size: 12px; }
+    .theme-tools button { border: 1px solid rgba(255,255,255,.16); border-radius: 999px; padding: 9px 14px; color: #f7f7f8; background: #252529; cursor: pointer; font-weight: 700; }
+    html[data-theme="light"] body { color: #202124; background: radial-gradient(ellipse at 50% -15%, #fff 0, #f1f2f4 55%, #e7e9ed 100%); }
+    html[data-theme="light"] .hero-title { color: #292a2d; }
+    html[data-theme="light"] .hero-subtitle { color: #5e6066; }
+    html[data-theme="light"] .panel { background: rgba(255,255,255,.96); border-color: #d9dce2; box-shadow: 0 18px 55px rgba(31,41,55,.12); }
+    html[data-theme="light"] .workflow-kicker { color: #8b0000; }
+    html[data-theme="light"] .workflow-intro p { color: #555b65; }
+    html[data-theme="light"] .upload-card, html[data-theme="light"] .filter-card { background: linear-gradient(155deg, #fff, #f7f8fa); border-color: #d9dce2; box-shadow: 0 5px 16px rgba(31,41,55,.05); }
+    html[data-theme="light"] .upload-title, html[data-theme="light"] .filter-title { color: #202124; }
+    html[data-theme="light"] .upload-text, html[data-theme="light"] .file-name { color: #5c626d; }
+    html[data-theme="light"] .theme-tools { color: #4b5058; }
+    html[data-theme="light"] .theme-tools button { color: #292a2d; background: #fff; border-color: #cfd3da; }
+    html[data-theme="light"] .dropdown-btn { color: #25262a; background: #fff; border-color: #cfd3da; }
+    html[data-theme="light"] .dropdown-content { background: #fff; border-color: #d7dae0; }
+    html[data-theme="light"] .search-input { color: #202124; background: #f0f1f4; }
+    html[data-theme="light"] .vendor-item { color: #292a2d; }
+    html[data-theme="light"] .vendor-item:hover { background: #f0f1f4; }
+    html[data-theme="light"] .selection-tools button { color: #30333a; background: #f2f3f5; border-color: #d2d5db; }
+    html[data-theme="light"] .status-panel { background: #f6f7f9; border-color: #d9dce2; }
+    html[data-theme="light"] .status-text { color: #555b65; }
+    html[data-theme="light"] .table-heading h2 { color: #202124; }
+    html[data-theme="light"] .table-heading p, html[data-theme="light"] .table-hint { color: #666c76; }
+    html[data-theme="light"] .table-wrapper { background: #fff; border-color: #d7dae0; box-shadow: 0 5px 18px rgba(31,41,55,.06); }
+    html[data-theme="light"] .table-wrapper::-webkit-scrollbar-track { background: #e9ebef; }
+    html[data-theme="light"] td { color: #30333a; border-bottom-color: #e7e9ed; }
+    html[data-theme="light"] .apv-cell { color: #202124; }
+    html[data-theme="light"] .manual-input { color: #202124; background: #f0f1f4; border: 1px solid #d4d7de; }
+    html[data-theme="light"] .total-row td { color: #fff; background: #76000a; }
+    html[data-theme="light"] tfoot { background: #76000a; }
+    body { padding: clamp(14px, 3vw, 36px); background: radial-gradient(ellipse at 50% -15%, #501116 0, #171719 44%, #0b0b0d 100%); }
+    .container { max-width: 1480px; }
+    .hero { margin: 8px 0 24px; }
+    .hero-logo { font-size: clamp(54px, 8vw, 82px); letter-spacing: 12px; }
+    .hero-title { margin-top: 8px; font-size: clamp(23px, 3.3vw, 34px); letter-spacing: 2px; }
+    .hero-subtitle { font-size: 13px; letter-spacing: .4px; text-transform: none; }
+    .hero-divider { margin: 18px auto; }
+    .panel { padding: clamp(16px, 2.6vw, 34px); border-radius: 24px; background: rgba(24, 24, 27, .92); border-color: rgba(255,255,255,.1); box-shadow: 0 22px 65px rgba(0,0,0,.38); }
+    .workflow-intro { margin: 0 0 20px; }
+    .workflow-kicker { color: #ffb7b7; font-size: 11px; font-weight: 800; letter-spacing: 1.6px; }
+    .workflow-intro p { color: #c6c6ca; margin-top: 6px; font-size: 14px; }
+    .upload-grid { grid-template-columns: repeat(4, minmax(180px, 1fr)); gap: 14px; margin-bottom: 26px; }
+    .upload-card, .filter-card { background: linear-gradient(155deg, rgba(255,255,255,.055), rgba(255,255,255,.018)); border-color: rgba(255,255,255,.1); border-radius: 18px; padding: 20px; }
+    .upload-title { font-size: 16px; margin-bottom: 7px; }
+    .upload-text { min-height: 34px; margin-bottom: 14px; color: #aaaab1; line-height: 1.45; }
+    .upload-btn, .action-btn { border-radius: 12px; min-height: 46px; transition: transform .18s, filter .18s, opacity .18s; }
+    .upload-btn:hover, .action-btn:hover { transform: translateY(-1px); filter: brightness(1.12); }
+    button:focus-visible, input:focus-visible { outline: 2px solid #ff7777; outline-offset: 3px; }
+    button:disabled { cursor: not-allowed; opacity: .48; transform: none !important; filter: none !important; }
+    .file-name { min-height: 32px; font-size: 12px; line-height: 1.5; color: #c8c8cf; }
+    .process-btn { min-height: 46px; background: linear-gradient(135deg, #a30b16, #e12835); }
+    .controls-panel { align-items: stretch; gap: 16px; margin-bottom: 22px; }
+    .filter-card { min-width: min(420px, 100%); }
+    .filter-title { font-size: 16px; }
+    .dropdown-btn { border-radius: 12px; padding: 14px; }
+    .dropdown-content { background: #17171a; }
+    .selection-tools { display: flex; gap: 8px; margin-bottom: 10px; }
+    .selection-tools button { border: 1px solid rgba(255,255,255,.12); border-radius: 8px; padding: 8px 10px; color: #e8e8eb; background: #252529; cursor: pointer; font-size: 12px; }
+    .actions-card { width: 260px; gap: 10px; }
+    .action-btn { padding: 12px 16px; }
+    .status-panel { margin: 0; border-radius: 12px; }
+    .table-section { margin-top: 0; }
+    .table-heading { display: flex; justify-content: space-between; align-items: end; gap: 12px; margin: 4px 2px 12px; }
+    .table-heading h2 { color: #f4f4f6; font-size: 18px; }
+    .table-heading p, .table-hint { color: #a8a8b0; font-size: 12px; margin-top: 4px; }
+    .table-wrapper { border-radius: 16px; }
+    table { min-width: 1250px; }
+    th { padding: 14px 12px; font-size: 11px; letter-spacing: .45px; }
+    td { padding: 12px; font-size: 13px; }
+    .manual-input { border-radius: 8px; }
+    .total-row td { background: rgba(125, 0, 0, .32); }
+    @media(max-width: 1050px) { .upload-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .actions-card { width: 100%; } }
+    @media(max-width: 620px) { .upload-grid { grid-template-columns: 1fr; } .upload-text { min-height: 0; } .controls-panel { display: block; } .filter-card { margin-bottom: 12px; } .hero-subtitle { line-height: 1.5; } .table-heading { display: block; } .table-hint { display: block; } }
+</style>
+
+</body>
+</html>

@@ -2,6 +2,11 @@
 # exportar_excel.py
 # ==========================================================
 
+import os
+import sys
+import tempfile
+from pathlib import Path
+
 import pandas as pd
 from openpyxl.drawing.image import Image
 from openpyxl.styles import (
@@ -25,8 +30,8 @@ HOJAS_CANALES = [
     "PISO",
     "LEADS MARCA",
     "LEADS BDC",
-    "CALLE",
-    "PLAZAS",
+    "PROSPECCION",
+    "POP-UP STORE",
     "EVENTOS",
     "REACTIVACIONES",
     "FAN PAGE"
@@ -93,10 +98,27 @@ def aplicar_logo(
     ruta_logo
 ):
 
-    logo = Image("logo.png")
+    nombre_logo = Path(ruta_logo).name
+    ubicaciones = [
+        Path(__file__).resolve().parent / nombre_logo,
+        Path.cwd() / nombre_logo,
+    ]
+    if getattr(sys, "frozen", False):
+        ubicaciones.insert(0, Path(sys.executable).resolve().parent / nombre_logo)
 
-    logo.width = 170
-    logo.height = 110
+    ruta_encontrada = next(
+        (ruta for ruta in ubicaciones if ruta.is_file()),
+        None
+    )
+    if ruta_encontrada is None:
+        raise FileNotFoundError(
+            f"No se encontró el logo requerido '{nombre_logo}' junto a la aplicación."
+        )
+
+    logo = Image(str(ruta_encontrada))
+    ancho_original, alto_original = logo.width, logo.height
+    logo.width = 140
+    logo.height = round(logo.width * alto_original / ancho_original)
 
     hoja.add_image(
         logo,
@@ -435,8 +457,8 @@ def aplicar_colores_por_canal(
         "PISO": "1F4E78",             
         "LEADS MARCA": "70AD47",      
         "LEADS BDC": "ED7D31",        
-        "CALLE": "7F7F7F",            
-        "PLAZAS": "7030A0",            
+        "PROSPECCION": "7F7F7F",
+        "POP-UP STORE": "7030A0",
         "EVENTOS": "FFC000",          
         "REACTIVACIONES": "C00000",   
         "FAN PAGE": "5B9BD5",  
@@ -476,17 +498,46 @@ def aplicar_congelado(hoja):
     hoja.freeze_panes = "B8"
 
 
+def agregar_totales_resumen(reporte):
+    """Devuelve el resumen con una fila de totales al final."""
+    reporte = reporte.copy()
+    columnas_numericas = [
+        columna for columna in reporte.columns
+        if columna != "APV"
+    ]
+
+    total = {columna: "" for columna in reporte.columns}
+    total["APV"] = "TOTAL GENERAL"
+    for columna in columnas_numericas:
+        valores = pd.to_numeric(reporte[columna], errors="coerce")
+        total[columna] = int(valores.fillna(0).sum())
+
+    return pd.concat([reporte, pd.DataFrame([total])], ignore_index=True)
+
+
+def aplicar_estilo_total(hoja, fila):
+    relleno = PatternFill(fill_type="solid", fgColor="6F0000")
+    fuente = Font(bold=True, color="FFFFFF")
+    for celda in hoja[fila]:
+        celda.fill = relleno
+        celda.font = fuente
+        celda.border = BORDE
+
+
 
 # ==========================================================
 # EXPORTAR
 # ==========================================================
 
-def exportar_excel(
+def _exportar_excel_archivo(
     reporte_resumen,
     df_clientes,
     eventos_manana,
     ruta_salida
 ):
+
+    reporte_con_totales = agregar_totales_resumen(reporte_resumen)
+    fila_total = 8 + len(reporte_resumen)
 
     with pd.ExcelWriter(
         ruta_salida,
@@ -497,7 +548,7 @@ def exportar_excel(
         # RESUMEN
         # ==================================
 
-        reporte_resumen.to_excel(
+        reporte_con_totales.to_excel(
             writer,
             sheet_name="RESUMEN",
             startrow=6,
@@ -512,6 +563,13 @@ def exportar_excel(
             hoja_resumen,
             "RESUMEN"
         )
+        aplicar_estilo_total(hoja_resumen, fila_total)
+        if len(reporte_resumen) > 0:
+            hoja_resumen.auto_filter.ref = (
+                f"A7:{get_column_letter(hoja_resumen.max_column)}{fila_total - 1}"
+            )
+        else:
+            hoja_resumen.auto_filter.ref = f"A7:{get_column_letter(hoja_resumen.max_column)}7"
 
         # ==================================
         # DETALLE POR CANAL
@@ -629,3 +687,36 @@ def exportar_excel(
         for hoja in workbook.worksheets:
 
             hoja.sheet_view.showGridLines = False
+
+
+def exportar_excel(
+    reporte_resumen,
+    df_clientes,
+    eventos_manana,
+    ruta_salida
+):
+    """Escribe el libro en un temporal y lo publica al terminar correctamente."""
+    destino = Path(ruta_salida)
+    destino.parent.mkdir(parents=True, exist_ok=True)
+
+    descriptor, temporal = tempfile.mkstemp(
+        prefix=f".{destino.stem}_",
+        suffix=".xlsx",
+        dir=destino.parent
+    )
+    os.close(descriptor)
+
+    try:
+        _exportar_excel_archivo(
+            reporte_resumen=reporte_resumen,
+            df_clientes=df_clientes,
+            eventos_manana=eventos_manana,
+            ruta_salida=temporal
+        )
+        os.replace(temporal, destino)
+    except Exception:
+        try:
+            os.remove(temporal)
+        except FileNotFoundError:
+            pass
+        raise
