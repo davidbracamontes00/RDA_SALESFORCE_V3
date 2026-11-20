@@ -330,21 +330,4 @@ def procesar_oportunidades(
         axis=1
     )
 
-    print("\n===== CANALES OPORTUNIDADES =====")
-    print(df["canal"].value_counts())
-
-    print("\n===== SOLO EVENTOS =====")
-    print(
-        df[
-            df["canal"] == "EVENTOS"
-        ][
-            [
-                "Nombre de la cuenta",
-                "Origen del prospecto",
-                "canal",
-                "Propietario de oportunidad"
-            ]
-        ]
-    )
-
     return construir_resultado(df)
