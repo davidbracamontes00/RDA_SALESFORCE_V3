@@ -18,7 +18,7 @@ WORKDIR /app
 
 RUN groupadd --system app \
     && useradd --system --gid app --home-dir /home/app app \
-    && mkdir -p /app/data/reports \
+    && mkdir -p /app/data/reports /home/app \
     && chown -R app:app /app /home/app
 
 COPY requirements.txt ./requirements.txt
